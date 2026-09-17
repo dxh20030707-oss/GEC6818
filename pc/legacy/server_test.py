@@ -15,11 +15,11 @@ import urllib.request
 
 # ==================== 🛠️ 沿用你 100% 正确的全部密钥 ====================
 APPID = "4dea6200"
-API_SECRET = "OTliZDhmZDllNGU1OWY1ZDA1ZmI3OWFi"
-API_KEY = "fe4a2c5653ce426222e2ffa7fa42c8b4"
+API_SECRET = ""
+API_KEY = ""
 
 AI_API_KEY = "填入你正常的大模型API_KEY"  
-AI_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+AI_URL = ""
 AI_MODEL = "qwen-turbo"  # 已经完美对齐变量名
 # ==================================================================
 
