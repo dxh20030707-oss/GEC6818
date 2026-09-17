@@ -16,10 +16,10 @@ import _thread
 
 # ==================== 🛠️ 密钥配置区 ====================
 APPID = "4dea6200"
-API_SECRET = "OTliZDhmZDllNGU1OWY1ZDA1ZmI3OWFi"
-API_KEY = "fe4a2c5653ce426222e2ffa7fa42c8b4"
+API_SECRET = "OTlY1ZDA1ZmI3OWFi"
+API_KEY = "f"
 
-AI_API_KEY = "sk-fba128a48b504d269debb713b11a1437"  
+AI_API_KEY = ""  
 AI_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 AI_MODEL = "qwen-turbo"
 # =======================================================
