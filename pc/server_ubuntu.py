@@ -28,7 +28,8 @@ STATUS_FIRST_FRAME = 0
 STATUS_CONTINUE_FRAME = 1
 STATUS_LAST_FRAME = 2
 
-def get_ai_answer(question_text):
+# 调用通义千问兼容接口，把语音识别得到的问题转换成简短的文字答案。
+def get_ai_answer(question_text): # 调用大模型API获取答案
     global AI_API_KEY, AI_URL, AI_MODEL
     try:
         headers = {"Authorization": "Bearer {}".format(AI_API_KEY), "Content-Type": "application/json"}
@@ -46,12 +47,16 @@ def get_ai_answer(question_text):
     except Exception as e:
         return "大模型脑部连接超时"
 
+# 保存讯飞语音合成请求所需的认证信息、业务参数和待合成文本。
 class TTS_Param(object):
+    # 初始化讯飞 TTS 请求的公共参数、业务参数和文本数据。
     def __init__(self, APPID, APIKey, APISecret, Text):
         self.APPID = APPID; self.APIKey = APIKey; self.APISecret = APISecret; self.Text = Text
         self.CommonArgs = {"app_id": self.APPID}
         self.BusinessArgs = {"aue": "raw", "auf": "audio/L16;rate=16000", "vcn": "xiaoyan", "tte": "utf8"}
         self.Data = {"status": 2, "text": str(base64.b64encode(self.Text.encode('utf-8')), "utf-8")}
+
+    # 按讯飞要求使用 HMAC-SHA256 生成带鉴权参数的 WebSocket 地址。
     def create_url(self):
         url = 'wss://tts-api.xfyun.cn/v2/tts'
         now = datetime.datetime.now(); date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
@@ -62,13 +67,17 @@ class TTS_Param(object):
         authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode(encoding='utf-8')
         return url + '?' + urlencode({"authorization": authorization, "date": date, "host": "tts-api.xfyun.cn"})
 
+# WebSocket 错误回调：当前程序不需要额外处理错误，所以保持为空。
 def dummy_error(ws, error): pass
+# WebSocket 关闭回调：当前程序不需要额外处理关闭事件，所以保持为空。
 def dummy_close(ws, close_status_code, close_msg): pass
 
+# 调用讯飞 TTS，把答案转换成板端可以播放的 8 kHz、8-bit、单声道 PCM。
 def generate_tts_pcm_xf(text_content, output_pcm_path):
     if os.path.exists("xf_temp_16k.pcm"): os.remove("xf_temp_16k.pcm")
     if os.path.exists(output_pcm_path): os.remove(output_pcm_path)
     
+    # 接收讯飞分片返回的音频，并在收到最后一片后统一转码。
     def on_tts_message(ws, message):
         msg = json.loads(message)
         if msg["code"] == 0:
@@ -83,6 +92,7 @@ def generate_tts_pcm_xf(text_content, output_pcm_path):
     ws.on_open = lambda w: _thread.start_new_thread(lambda: w.send(json.dumps({"common": tts_param.CommonArgs, "business": tts_param.BusinessArgs, "data": tts_param.Data})), ())
     ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
 
+# 生成答案语音，并把“问题、答案文本 + 音频数据”一次性发送回开发板。
 def send_text_and_voice_to_board(board_ip, question, answer):
     try:
         generate_tts_pcm_xf(answer, "reply.pcm")
@@ -105,11 +115,15 @@ def send_text_and_voice_to_board(board_ip, question, answer):
     except Exception as e:
         print("❌ [状态] 回传板子失败:", e)
 
+# 保存讯飞语音识别请求所需的认证信息和识别参数。
 class Ws_Param(object):
+    # 初始化讯飞 IAT 请求的公共参数和业务参数。
     def __init__(self, APPID, APIKey, APISecret):
         self.APPID = APPID; self.APIKey = APIKey; self.APISecret = APISecret
         self.CommonArgs = {"app_id": self.APPID}
         self.BusinessArgs = {"domain": "iat", "language": "zh_cn", "accent": "mandarin", "vinfo": 1, "vad_eos": 10000}
+
+    # 按讯飞要求生成带鉴权参数的语音识别 WebSocket 地址。
     def create_url(self):
         url = 'wss://iat-api.xfyun.cn/v2/iat'
         now = datetime.datetime.now(); date = now.strftime('%a, %d %b %Y %H:%M:%S GMT')
@@ -120,6 +134,7 @@ class Ws_Param(object):
         authorization = base64.b64encode(authorization_origin.encode('utf-8')).decode(encoding='utf-8')
         return url + '?' + urlencode({"authorization": authorization, "date": date, "host": "iat-api.xfyun.cn"})
 
+# 处理讯飞识别结果：拼接文字、调用大模型，并触发答案回传。
 def on_message(ws, message):
     try:
         code = json.loads(message)["code"]
@@ -143,9 +158,13 @@ def on_message(ws, message):
     except Exception as e:
         pass
 
+# 语音识别 WebSocket 错误回调；当前只忽略错误，不中断主服务。
 def on_error(ws, error): pass
+# 语音识别 WebSocket 关闭回调；当前不需要额外清理动作。
 def on_close(ws, a, b): pass
+# 语音识别 WebSocket 建立后，按讯飞协议分片上传 WAV 中的 PCM 数据。
 def on_open(ws):
+    # 在独立线程中发送音频，避免阻塞 WebSocket 的事件循环。
     def run(*args):
         frameSize = 8000; status = STATUS_FIRST_FRAME
         with open("rec_clean_16k.wav", "rb") as fp:
@@ -165,6 +184,7 @@ def on_open(ws):
         ws.close()
     _thread.start_new_thread(run, ())
 
+# 将板端的 8 kHz、8-bit 无符号 PCM 放大为 16 kHz、16-bit 有符号 WAV。
 def convert_8k_u8_to_16k_s16_wav(input_path, output_path):
     if not os.path.exists(input_path): return False
     with open(input_path, "rb") as f: raw_data = f.read()
@@ -178,6 +198,7 @@ def convert_8k_u8_to_16k_s16_wav(input_path, output_path):
     with open(output_path, "wb") as f: f.write(header); f.write(upgraded_pcm)
     return True
 
+# 启动 8888 TCP 服务：接收板端录音，并串联音频转换、识别、问答和回传流程。
 def start_socket_server():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
